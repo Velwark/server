@@ -36,7 +36,10 @@ class SetTransactionIsolationLevel implements EventSubscriber {
 	 * @return void
 	 */
 	public function postConnect(ConnectionEventArgs $args) {
-		$args->getConnection()->setTransactionIsolation(TransactionIsolationLevel::READ_COMMITTED);
+		// Maybe this has an effect on primary
+		if ($args->getConnection()->isConnectedToPrimary()) {
+			$args->getConnection()->setTransactionIsolation(TransactionIsolationLevel::READ_COMMITTED);
+		}
 	}
 
 	public function getSubscribedEvents() {

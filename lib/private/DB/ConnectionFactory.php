@@ -129,8 +129,8 @@ class ConnectionFactory {
 		$eventManager->addEventSubscriber(new SetTransactionIsolationLevel());
 		switch ($normalizedType) {
 			case 'mysql':
-				$eventManager->addEventSubscriber(
-					new SQLSessionInit("SET SESSION AUTOCOMMIT=1"));
+				// $eventManager->addEventSubscriber(
+				// 	new SQLSessionInit("SET SESSION AUTOCOMMIT=1"));
 				break;
 			case 'oci':
 				$eventManager->addEventSubscriber(new OracleSessionInit);
@@ -237,7 +237,11 @@ class ConnectionFactory {
 			$connectionParams['persistent'] = true;
 		}
 
-		return $connectionParams;
+		$replica = $this->config->getValue('dbreplica', []) ?: [$connectionParams];
+		return array_merge($connectionParams, [
+			'primary' => $connectionParams,
+			'replica' => $replica,
+		]);
 	}
 
 	/**

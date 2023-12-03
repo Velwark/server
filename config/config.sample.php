@@ -151,6 +151,11 @@ $CONFIG = [
  */
 'dbpersistent' => '',
 
+'dbreplica' => [
+	['user' => 'replica1', 'password', 'host' => '', 'dbname' => ''],
+	['user' => 'replica1', 'password', 'host' => '', 'dbname' => ''],
+],
+
 /**
  * Indicates whether the Nextcloud instance was installed successfully; ``true``
  * indicates a successful installation, and ``false`` indicates an unsuccessful
