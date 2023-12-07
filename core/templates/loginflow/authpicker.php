@@ -57,7 +57,7 @@ $urlGenerator = $_['urlGenerator'];
 			<label for="user" class="infield"><?php p($l->t('Username')) ?></label>
 		</p>
 		<p class="groupbottom">
-			<input type="password" name="password" id="password" placeholder="<?php p($l->t('App token')) ?>">
+			<input type="password" name="password" id="password" placeholder="<?php p($l->t('App password')) ?>">
 			<label for="password" class="infield"><?php p($l->t('Password')) ?></label>
 		</p>
 		<input type="hidden" name="stateToken" value="<?php p($_['stateToken']) ?>" />
