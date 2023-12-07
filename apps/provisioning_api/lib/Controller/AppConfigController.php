@@ -113,7 +113,7 @@ class AppConfigController extends OCSController {
 			return new DataResponse(['data' => ['message' => $e->getMessage()]], Http::STATUS_FORBIDDEN);
 		}
 		return new DataResponse([
-			'data' => $this->config->getAppKeys($app),
+			'data' => $this->appConfig->getKeys($app),
 		]);
 	}
 

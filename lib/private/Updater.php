@@ -58,6 +58,7 @@ use OCP\App\IAppManager;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventDispatcher;
 use OCP\HintException;
+use OCP\IAppConfig;
 use OCP\IConfig;
 use OCP\ILogger;
 use OCP\Util;
@@ -73,18 +74,6 @@ use Psr\Log\LoggerInterface;
  *  - failure(string $message)
  */
 class Updater extends BasicEmitter {
-	/** @var LoggerInterface */
-	private $log;
-
-	/** @var IConfig */
-	private $config;
-
-	/** @var Checker */
-	private $checker;
-
-	/** @var Installer */
-	private $installer;
-
 	private $logLevelNames = [
 		0 => 'Debug',
 		1 => 'Info',
@@ -93,14 +82,12 @@ class Updater extends BasicEmitter {
 		4 => 'Fatal',
 	];
 
-	public function __construct(IConfig $config,
-		Checker $checker,
-		?LoggerInterface $log,
-		Installer $installer) {
-		$this->log = $log;
-		$this->config = $config;
-		$this->checker = $checker;
-		$this->installer = $installer;
+	public function __construct(
+		private IConfig $config,
+		private IAppConfig $appConfig,
+		private Checker $checker,
+		private ?LoggerInterface $log,
+		private Installer $installer) {
 	}
 
 	/**
@@ -164,6 +151,7 @@ class Updater extends BasicEmitter {
 		$this->emit('\OC\Updater', 'resetLogLevel', [ $logLevel, $this->logLevelNames[$logLevel] ]);
 		$this->config->setSystemValue('loglevel', $logLevel);
 		$this->config->setSystemValue('installed', true);
+		$this->config->setSystemValue('memcache.prefix', $this->generateCachePrefix());
 
 		return $success;
 	}
@@ -368,6 +356,10 @@ class Updater extends BasicEmitter {
 				}
 			}
 		}
+
+
+		// setSystemAppValue() ?
+
 	}
 
 	/**
@@ -540,5 +532,13 @@ class Updater extends BasicEmitter {
 		$this->listen('\OC\Updater', 'finishedCheckCodeIntegrity', function () use ($log) {
 			$log->info('\OC\Updater::finishedCheckCodeIntegrity: Finished code integrity check', ['app' => 'updater']);
 		});
+	}
+
+	public function generateCachePrefix(): string {
+		$this->appConfig->clearCache();
+		$v = $this->appConfig->searchValues('installed_version');
+		$v['core'] = implode('.', \OC_Util::getVersion());
+		$version = implode(':', $v);
+		return md5(\OC_Util::getInstanceId() . '-' . $version . '-' . \OC::$SERVERROOT);
 	}
 }

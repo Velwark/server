@@ -1,9 +1,12 @@
 <?php
+
+declare(strict_types=1);
 /**
  * @copyright Copyright (c) 2016, ownCloud, Inc.
  *
  * @author Bart Visscher <bartv@thisnet.nl>
  * @author Joas Schilling <coding@schilljs.com>
+ * @author Maxence Lange <maxence@artificial-owl.com>
  * @author Morris Jobke <hey@morrisjobke.de>
  * @author Robin Appelman <robin@icewind.nl>
  * @author Robin McCorkell <robin@mccorkell.me.uk>
@@ -29,44 +32,401 @@ namespace OCP;
 /**
  * This class provides an easy way for apps to store config values in the
  * database.
+ *
+ * **Note:** since 29.0.0, it supports **lazy grouping**
+ *
+ * ### What is lazy grouping ?
+ * In order to avoid loading useless config values in memory for each request on
+ * the cloud, it has been made possible to group your config keys.
+ * Each group, called _lazy group_, is only loaded in memory when one its config
+ * keys is retrieved.
+ *
+ * It is advised to only use the default lazy group, named '' (empty string), for
+ * config keys used in the registered part of your code that is called even when
+ * your app is not boot (as in event listeners, ...)
+ *
+ * **Note:** Lazy group are not linked to app ids. Multiple app can share the same
+ * lazy group and config keys from those apps will be loaded in memory when one value
+ * from th lazy group is retrieved.
+ *
+ * **Warning:** some methods from this class are marked with a warning about ignoring
+ * lazy grouping, use them wisely and only on part of code called during
+ * specific request/action
+ *
  * @since 7.0.0
  */
 interface IAppConfig {
+
 	/**
-	 * check if a key is set in the appconfig
-	 * @param string $app
-	 * @param string $key
-	 * @return bool
+	 * Get list of all apps that have at least one config value stored in database
+	 *
+	 * **WARNING:** bypass cache and request database each time
+	 *
+	 * @param bool $preloadValues preload all values (since 29.0.0)
+	 *
+	 * @return string[] list of app ids
 	 * @since 7.0.0
 	 */
-	public function hasKey($app, $key);
+	public function getApps(bool $preloadValues = false): array;
+
+	/**
+	 * Returns all keys related to an app.
+	 * Please note that the values are not returned.
+	 *
+	 * **Warning:** ignore lazy grouping
+	 *
+	 * @param string $app id of the app
+	 *
+	 * @return string[] list of stored config keys
+	 * @since 29.0.0
+	 */
+	public function getKeys(string $app): array;
+
+	/**
+	 * Check if a key exists in the list of stored config values.
+	 * To search for a key while ignoring lazy grouping, use getLazyGroup()
+	 *
+	 * @param string $app id of the app
+	 * @param string $key config key
+	 * @param string $lazyGroup search key within a lazy group (since 29.0.0)
+	 *
+	 * @return bool TRUE if key exists
+	 * @see self::getLazyGroup()
+	 * @since 7.0.0
+	 */
+	public function hasKey(string $app, string $key, string $lazyGroup = ''): bool;
+
+	/**
+	 * @param string $app id of the app
+	 * @param string $key config key
+	 * @param string $lazyGroup lazy group
+	 * @return bool
+	 * @since 29.0.0
+	 */
+	public function isSensitiveKey(string $app, string $key, string $lazyGroup = ''): bool;
+
+	/**
+	 * Find the lazy group a config key belongs to.
+	 * Returns NULL is key it now known.
+	 *
+	 * **Warning:** bypass cache and request database each time
+	 *
+	 * @param string $app id of the app
+	 * @param string $key config key
+	 *
+	 * @return string|null lazy group or NULL if key is not found
+	 * @since 29.0.0
+	 */
+	public function getLazyGroup(string $app, string $key): ?string;
+
+	/**
+	 * List all config values from an app with config key starting with $key.
+	 * Returns an array with config key as key, stored value as value.
+	 *
+	 * @param string $app id of the app
+	 * @param string $key config keys prefix to search
+	 * @param bool $filtered filter sensitive config values
+	 *
+	 * @return array<string, string> [configKey => configValue]
+	 * @since 29.0.0
+	 */
+	public function getAllValues(string $app, string $key = '', bool $filtered = false): array;
+
+	/**
+	 * List all apps storing a specific config key and its stored value.
+	 * Returns an array with appId as key, stored value as value.
+	 *
+	 * @param string $key config key
+	 * @param string $lazyGroup lazy group
+	 *
+	 * @return array<string, string> [appId => configValue]
+	 * @since 29.0.0
+	 */
+	public function searchValues(string $key, string $lazyGroup = ''): array;
+
+	/**
+	 * Get config value assigned to a config key.
+	 * If config key is not found in database, default value is returned.
+	 * If config key belongs to a lazy group, the name of the lazy group needs to be specified.
+	 *
+	 * @param string $app id of the app
+	 * @param string $key config key
+	 * @param string $default default value (optional)
+	 * @param string $lazyGroup name of the lazy group (optional)
+	 *
+	 * @return string stored config value or $default if not set in database
+	 * @since 29.0.0
+	 * @see IAppConfig for explanation about lazy grouping
+	 * @see self::getValueInt()
+	 * @see self::getValueFloat()
+	 * @see self::getValueBool()
+	 * @see self::getValueArray()
+	 */
+	public function getValueString(string $app, string $key, string $default = '', string $lazyGroup = ''): string;
+
+	/**
+	 * Get config value assigned to a config key.
+	 * If config key is not found in database, default value is returned.
+	 * If config key belongs to a lazy group, the name of the lazy group needs to be specified.
+	 *
+	 * @param string $app id of the app
+	 * @param string $key config key
+	 * @param int $default default value
+	 * @param string $lazyGroup name of the lazy group
+	 *
+	 * @return int stored config value or $default if not set in database
+	 * @since 29.0.0
+	 * @see IAppConfig for explanation about lazy grouping
+	 * @see self::getValueString()
+	 * @see self::getValueFloat()
+	 * @see self::getValueBool()
+	 * @see self::getValueArray()
+	 */
+	public function getValueInt(string $app, string $key, int $default = 0, string $lazyGroup = ''): int;
+
+	/**
+	 * Get config value assigned to a config key.
+	 * If config key is not found in database, default value is returned.
+	 * If config key belongs to a lazy group, the name of the lazy group needs to be specified.
+	 *
+	 * @param string $app id of the app
+	 * @param string $key config key
+	 * @param float $default default value (optional)
+	 * @param string $lazyGroup name of the lazy group (optional)
+	 *
+	 * @return float stored config value or $default if not set in database
+	 * @since 29.0.0
+	 * @see IAppConfig for explanation about lazy grouping
+	 * @see self::getValueString()
+	 * @see self::getValueInt()
+	 * @see self::getValueBool()
+	 * @see self::getValueArray()
+	 */
+	public function getValueFloat(string $app, string $key, float $default = 0, string $lazyGroup = ''): float;
+
+	/**
+	 * Get config value assigned to a config key.
+	 * If config key is not found in database, default value is returned.
+	 * If config key belongs to a lazy group, the name of the lazy group needs to be specified.
+	 *
+	 * @param string $app id of the app
+	 * @param string $key config key
+	 * @param bool $default default value (optional)
+	 * @param string $lazyGroup name of the lazy group (optional)
+	 *
+	 * @return bool stored config value or $default if not set in database
+	 * @since 29.0.0
+	 * @see IAppConfig for explanation about lazy grouping
+	 * @see self::getValueString()
+	 * @see self::getValueInt()
+	 * @see self::getValueFloat()
+	 * @see self::getValueArray()
+	 */
+	public function getValueBool(string $app, string $key, bool $default = false, string $lazyGroup = ''): bool;
+
+	/**
+	 * Get config value assigned to a config key.
+	 * If config key is not found in database, default value is returned.
+	 * If config key belongs to a lazy group, the name of the lazy group needs to be specified.
+	 *
+	 * @param string $app id of the app
+	 * @param string $key config key
+	 * @param array $default default value (optional)
+	 * @param string $lazyGroup name of the lazy group (optional)
+	 *
+	 * @return array stored config value or $default if not set in database
+	 * @since 29.0.0
+	 * @see IAppConfig for explanation about lazy grouping
+	 * @see self::getValueString()
+	 * @see self::getValueInt()
+	 * @see self::getValueFloat()
+	 * @see self::getValueBool()
+	 */
+	public function getValueArray(string $app, string $key, array $default = [], string $lazyGroup = ''): array;
+
+	/**
+	 * Store a config key and its value in database
+	 * If config key is already known with the exact same config value, the database is not updated.
+	 * If config key is not supposed to be read during the boot of the cloud, it is advised to assign it to a lazy group.
+	 *
+	 * @param string $app id of the app
+	 * @param string $key config key
+	 * @param string $value config value
+	 * @param bool|null $sensitive value should be hidden when needed. if NULL sensitive flag is not changed in database
+	 * @param string $lazyGroup name of the lazy group
+	 *
+	 * @return bool TRUE if value was different, therefor updated in database
+	 * @since 29.0.0
+	 * @see IAppConfig for explanation about lazy grouping
+	 * @see self::setValueInt()
+	 * @see self::setValueFloat()
+	 * @see self::setValueBool()
+	 * @see self::setValueArray()
+	 */
+	public function setValueString(string $app, string $key, string $value, ?bool $sensitive = null, string $lazyGroup = ''): bool;
+
+	/**
+	 * Store a config key and its value in database
+	 * If config key is already known with the exact same config value, the database is not updated.
+	 * If config key is not supposed to be read during the boot of the cloud, it is advised to assign it to a lazy group.
+	 *
+	 * @param string $app id of the app
+	 * @param string $key config key
+	 * @param int $value config value
+	 * @param bool|null $sensitive value should be hidden when needed. if NULL sensitive flag is not changed in database
+	 * @param string $lazyGroup name of the lazy group
+	 *
+	 * @return bool TRUE if value was different, therefor updated in database
+	 * @since 29.0.0
+	 * @see IAppConfig for explanation about lazy grouping
+	 * @see self::setValueString()
+	 * @see self::setValueFloat()
+	 * @see self::setValueBool()
+	 * @see self::setValueArray()
+	 */
+	public function setValueInt(string $app, string $key, int $value, ?bool $sensitive = null, string $lazyGroup = ''): bool;
+
+	/**
+	 * Store a config key and its value in database
+	 * If config key is already known with the exact same config value, the database is not updated.
+	 * If config key is not supposed to be read during the boot of the cloud, it is advised to assign it to a lazy group.
+	 *
+	 * @param string $app id of the app
+	 * @param string $key config key
+	 * @param float $value config value
+	 * @param bool|null $sensitive value should be hidden when needed. if NULL sensitive flag is not changed in database
+	 * @param string $lazyGroup name of the lazy group
+	 *
+	 * @return bool TRUE if value was different, therefor updated in database
+	 * @since 29.0.0
+	 * @see IAppConfig for explanation about lazy grouping
+	 * @see self::setValueString()
+	 * @see self::setValueInt()
+	 * @see self::setValueBool()
+	 * @see self::setValueArray()
+	 */
+	public function setValueFloat(string $app, string $key, float $value, ?bool $sensitive = null, string $lazyGroup = ''): bool;
+
+	/**
+	 * Store a config key and its value in database
+	 * If config key is already known with the exact same config value, the database is not updated.
+	 * If config key is not supposed to be read during the boot of the cloud, it is advised to assign it to a lazy group.
+	 *
+	 * @param string $app id of the app
+	 * @param string $key config key
+	 * @param bool $value config value
+	 * @param bool|null $sensitive value should be hidden when needed. if NULL sensitive flag is not changed in database
+	 * @param string $lazyGroup name of the lazy group
+	 *
+	 * @return bool TRUE if value was different, therefor updated in database
+	 * @since 29.0.0
+	 * @see IAppConfig for explanation about lazy grouping
+	 * @see self::setValueString()
+	 * @see self::setValueInt()
+	 * @see self::setValueFloat()
+	 * @see self::setValueArray()
+	 */
+	public function setValueBool(string $app, string $key, bool $value, ?bool $sensitive = null, string $lazyGroup = ''): bool;
+
+	/**
+	 * Store a config key and its value in database
+	 * If config key is already known with the exact same config value, the database is not updated.
+	 * If config key is not supposed to be read during the boot of the cloud, it is advised to assign it to a lazy group.
+	 *
+	 * @param string $app id of the app
+	 * @param string $key config key
+	 * @param array $value config value
+	 * @param bool|null $sensitive value should be hidden when needed. if NULL sensitive flag is not changed in database
+	 * @param string $lazyGroup name of the lazy group
+	 *
+	 * @return bool TRUE if value was different, therefor updated in database
+	 * @since 29.0.0
+	 * @see IAppConfig for explanation about lazy grouping
+	 * @see self::setValueString()
+	 * @see self::setValueInt()
+	 * @see self::setValueFloat()
+	 * @see self::setValueBool()
+	 */
+	public function setValueArray(string $app, string $key, array $value, ?bool $sensitive = null, string $lazyGroup = ''): bool;
+
+	/**
+	 * Delete single config key from database.
+	 *
+	 * @param string $app id of the app
+	 * @param string $key config key
+	 *
+	 * @since 29.0.0
+	 */
+	public function unsetKey(string $app, string $key): void;
+
+	/**
+	 * delete all config keys linked to an app
+	 *
+	 * @param string $app id of the app
+	 * @since 29.0.0
+	 */
+	public function unsetAppKeys(string $app): void;
+
+	/**
+	 * delete all config keys linked to a lazy group
+	 *
+	 * @param string $lazyGroup
+	 *
+	 * @since 29.0.0
+	 * @see IAppConfig for explanation about lazy grouping
+	 */
+	public function deleteLazyGroup(string $lazyGroup): void;
+
+	/**
+	 * Clear the cache.
+	 *
+	 * Clearing cache consist of emptying the internal cache and the distributed cache.
+	 * The cache will be rebuilt only the next time a config value is requested.
+	 *
+	 * @since 29.0.0
+	 */
+	public function clearCache(): void;
+
+	/**
+	 * For debug purpose.
+	 * Returns the cached information.
+	 *
+	 * @return array
+	 * @since 29.0.0
+	 */
+	public function statusCache(): array;
+
+	/*
+	 *
+	 * #######################################################################
+	 * # Below this mark are the method deprecated and replaced since 29.0.0 #
+	 * #######################################################################
+	 *
+	 */
 
 	/**
 	 * get multiply values, either the app or key can be used as wildcard by setting it to false
+	 * @deprecated use getAllValues()
 	 *
 	 * @param string|false $key
 	 * @param string|false $app
+	 *
 	 * @return array|false
 	 * @since 7.0.0
+	 * @deprecated use getAllValues()
+	 * @see self::getAllValues()
 	 */
 	public function getValues($app, $key);
 
 	/**
 	 * get all values of the app or and filters out sensitive data
+	 * @deprecated use getAllValues()
 	 *
 	 * @param string $app
+	 *
 	 * @return array
 	 * @since 12.0.0
+	 * @see self::getAllValues()
 	 */
 	public function getFilteredValues($app);
-
-	/**
-	 * Get all apps using the config
-	 * @return string[] an array of app ids
-	 *
-	 * This function returns a list of all apps that have at least one
-	 * entry in the appconfig table.
-	 * @since 7.0.0
-	 */
-	public function getApps();
 }

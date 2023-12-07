@@ -40,11 +40,14 @@ use OC\Repair\Events\RepairStepEvent;
 use OC\Repair\Events\RepairWarningEvent;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventDispatcher;
+use OCP\IAppConfig;
+use OCP\IConfig;
 use OCP\IEventSource;
 use OCP\IEventSourceFactory;
 use OCP\IL10N;
 use OCP\ILogger;
 use OCP\L10N\IFactory;
+use OCP\Server;
 
 if (!str_contains(@ini_get('disable_functions'), 'set_time_limit')) {
 	@set_time_limit(0);
@@ -112,9 +115,10 @@ if (\OCP\Util::needUpgrade()) {
 	\OC_User::setIncognitoMode(true);
 
 	$logger = \OC::$server->get(\Psr\Log\LoggerInterface::class);
-	$config = \OC::$server->getConfig();
+	$config = Server::get(IConfig::class);
 	$updater = new \OC\Updater(
 		$config,
+		Server::get(IAppConfig::class),
 		\OC::$server->getIntegrityCodeChecker(),
 		$logger,
 		\OC::$server->query(\OC\Installer::class)

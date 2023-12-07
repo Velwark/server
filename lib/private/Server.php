@@ -676,27 +676,11 @@ class Server extends ServerContainer implements IServerContainer {
 			$config = $c->get(\OCP\IConfig::class);
 
 			if ($config->getSystemValueBool('installed', false) && !(defined('PHPUNIT_RUN') && PHPUNIT_RUN)) {
-				if (!$config->getSystemValueBool('log_query')) {
-					try {
-						$v = \OC_App::getAppVersions();
-					} catch (\Doctrine\DBAL\Exception $e) {
-						// Database service probably unavailable
-						// Probably related to https://github.com/nextcloud/server/issues/37424
-						return $arrayCacheFactory;
-					}
-				} else {
-					// If the log_query is enabled, we can not get the app versions
-					// as that does a query, which will be logged and the logging
-					// depends on redis and here we are back again in the same function.
-					$v = [
-						'log_query' => 'enabled',
-					];
+				$prefix = $config->getSystemValueString('memcache.prefix', ''); // prefix is updated on update (core or apps)
+				if ($prefix === '') {
+					$prefix = md5(\OC_Util::getInstanceId() . '-' . implode(',', \OC_Util::getVersion()) . '-' . \OC::$SERVERROOT);
+					$config->setSystemValue('memcache.prefix', substr($prefix, 0, -6) . '-' . rand(10000, 99999));
 				}
-				$v['core'] = implode(',', \OC_Util::getVersion());
-				$version = implode(',', $v);
-				$instanceId = \OC_Util::getInstanceId();
-				$path = \OC::$SERVERROOT;
-				$prefix = md5($instanceId . '-' . $version . '-' . $path);
 				return new \OC\Memcache\Factory($prefix,
 					$c->get(LoggerInterface::class),
 					$profiler,
