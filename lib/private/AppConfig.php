@@ -353,7 +353,7 @@ class AppConfig implements IAppConfig {
 	 */
 	public function getValueBool(string $app, string $key, bool $default = false, bool $lazy = false): bool {
 		return in_array(
-			$this->getValueString($app, $key, $default ? 'true' : 'false'), ['1', 'true', 'yes', 'on'], $lazy
+			$this->getValueString($app, $key, $default ? 'true' : 'false', $lazy), ['1', 'true', 'yes', 'on']
 		);
 	}
 
@@ -380,7 +380,7 @@ class AppConfig implements IAppConfig {
 				$this->getValueString($app, $key, $defaultJson, $lazy), true, JSON_THROW_ON_ERROR
 			);
 
-			return (is_array($value)) ? $value : [$value];
+			return is_array($value) ? $value : [];
 		} catch (JsonException) {
 			return [];
 		}

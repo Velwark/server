@@ -126,7 +126,7 @@ interface IConfig {
 	 * @param string $appName the appName that we stored the value under
 	 * @return string[] the keys stored for the app
 	 * @since 8.0.0
-	 * @deprecated - load IAppConfig directly
+	 * @deprecated 29.0.0 Use {@see IAppConfig} directly
 	 */
 	public function getAppKeys($appName);
 
@@ -138,7 +138,7 @@ interface IConfig {
 	 * @param string $value the value that should be stored
 	 * @return void
 	 * @since 6.0.0
-	 * @deprecated - load IAppConfig directly
+	 * @deprecated 29.0.0 Use {@see IAppConfig} directly
 	 */
 	public function setAppValue($appName, $key, $value);
 
@@ -151,7 +151,7 @@ interface IConfig {
 	 *
 	 * @return string the saved value
 	 * @since 6.0.0 - parameter $default was added in 7.0.0
-	 * @deprecated - load IAppConfig directly
+	 * @deprecated 29.0.0 Use {@see IAppConfig} directly
 	 */
 	public function getAppValue($appName, $key, $default = '');
 
@@ -161,7 +161,7 @@ interface IConfig {
 	 * @param string $appName the appName that we stored the value under
 	 * @param string $key the key of the value, under which it was saved
 	 * @since 8.0.0
-	 * @deprecated - load IAppConfig directly
+	 * @deprecated 29.0.0 Use {@see IAppConfig} directly
 	 */
 	public function deleteAppValue($appName, $key);
 
@@ -170,7 +170,7 @@ interface IConfig {
 	 *
 	 * @param string $appName the appName the configs are stored under
 	 * @since 8.0.0
-	 * @deprecated - load IAppConfig directly
+	 * @deprecated 29.0.0 Use {@see IAppConfig} directly
 	 */
 	public function deleteAppValues($appName);
 

@@ -190,7 +190,7 @@ class AllConfig implements IConfig {
 	 *
 	 * @param string $appName the appName that we stored the value under
 	 * @return string[] the keys stored for the app
-	 * @deprecated - load IAppConfig directly
+	 * @deprecated 29.0.0 Use {@see IAppConfig} directly
 	 */
 	public function getAppKeys($appName) {
 		return \OC::$server->get(AppConfig::class)->getKeys($appName);
@@ -202,7 +202,7 @@ class AllConfig implements IConfig {
 	 * @param string $appName the appName that we want to store the value under
 	 * @param string $key the key of the value, under which will be saved
 	 * @param string|float|int $value the value that should be stored
-	 * @deprecated - load IAppConfig directly
+	 * @deprecated 29.0.0 Use {@see IAppConfig} directly
 	 */
 	public function setAppValue($appName, $key, $value) {
 		\OC::$server->get(AppConfig::class)->setValue($appName, $key, $value);
@@ -215,7 +215,7 @@ class AllConfig implements IConfig {
 	 * @param string $key the key of the value, under which it was saved
 	 * @param string $default the default value to be returned if the value isn't set
 	 * @return string the saved value
-	 * @deprecated - load IAppConfig directly
+	 * @deprecated 29.0.0 Use {@see IAppConfig} directly
 	 */
 	public function getAppValue($appName, $key, $default = '') {
 		return \OC::$server->get(AppConfig::class)->getValue($appName, $key, $default);
@@ -226,7 +226,7 @@ class AllConfig implements IConfig {
 	 *
 	 * @param string $appName the appName that we stored the value under
 	 * @param string $key the key of the value, under which it was saved
-	 * @deprecated - load IAppConfig directly
+	 * @deprecated 29.0.0 Use {@see IAppConfig} directly
 	 */
 	public function deleteAppValue($appName, $key) {
 		\OC::$server->get(AppConfig::class)->deleteKey($appName, $key);
@@ -236,7 +236,7 @@ class AllConfig implements IConfig {
 	 * Removes all keys in appconfig belonging to the app
 	 *
 	 * @param string $appName the appName the configs are stored under
-	 * @deprecated - load IAppConfig directly
+	 * @deprecated 29.0.0 Use {@see IAppConfig} directly
 	 */
 	public function deleteAppValues($appName) {
 		\OC::$server->get(AppConfig::class)->deleteApp($appName);

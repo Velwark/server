@@ -253,7 +253,7 @@ interface IAppConfig {
 	 * @param string $key config key
 	 * @param string $value config value
 	 * @param bool|null $sensitive value should be hidden when needed. if NULL sensitive flag is not changed in database
-	 * @param string $lazy name of the lazy group
+	 * @param bool $lazy set config as lazy loaded
 	 *
 	 * @return bool TRUE if value was different, therefor updated in database
 	 * @since 29.0.0
@@ -263,7 +263,7 @@ interface IAppConfig {
 	 * @see self::setValueBool()
 	 * @see self::setValueArray()
 	 */
-	public function setValueString(string $app, string $key, string $value, bool $lazy = false, ?bool $sensitive = null): bool;
+	public function setValueString(string $app, string $key, string $value, bool $sensitive, bool $lazy = false): bool;
 
 	/**
 	 * Store a config key and its value in database
@@ -385,37 +385,27 @@ interface IAppConfig {
 	 */
 	public function statusCache(): array;
 
-	/*
-	 *
-	 * #######################################################################
-	 * # Below this mark are the method deprecated and replaced since 29.0.0 #
-	 * #######################################################################
-	 *
-	 */
 
 	/**
 	 * get multiply values, either the app or key can be used as wildcard by setting it to false
-	 * @deprecated use getAllValues()
 	 *
 	 * @param string|false $key
 	 * @param string|false $app
 	 *
 	 * @return array|false
 	 * @since 7.0.0
-	 * @deprecated use getAllValues()
-	 * @see self::getAllValues()
+	 * @deprecated 29.0.0 Use {@see getAllValues()}
 	 */
 	public function getValues($app, $key);
 
 	/**
 	 * get all values of the app or and filters out sensitive data
-	 * @deprecated use getAllValues()
 	 *
 	 * @param string $app
 	 *
 	 * @return array
 	 * @since 12.0.0
-	 * @see self::getAllValues()
+	 * @deprecated 29.0.0 Use {@see getAllValues()}
 	 */
 	public function getFilteredValues($app);
 }
