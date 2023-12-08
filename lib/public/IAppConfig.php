@@ -88,36 +88,36 @@ interface IAppConfig {
 	 *
 	 * @param string $app id of the app
 	 * @param string $key config key
-	 * @param string $lazyGroup search key within a lazy group (since 29.0.0)
+	 * @param bool $lazy search key set as lazy loaded (since 29.0.0)
 	 *
 	 * @return bool TRUE if key exists
-	 * @see self::getLazyGroup()
+	 * @see self::isLazy()
 	 * @since 7.0.0
 	 */
-	public function hasKey(string $app, string $key, string $lazyGroup = ''): bool;
+	public function hasKey(string $app, string $key, bool $lazy = false): bool;
 
 	/**
 	 * @param string $app id of the app
 	 * @param string $key config key
-	 * @param string $lazyGroup lazy group
+	 * @param bool $lazy lazy loading
+	 *
 	 * @return bool
 	 * @since 29.0.0
 	 */
-	public function isSensitiveKey(string $app, string $key, string $lazyGroup = ''): bool;
+	public function isSensitiveKey(string $app, string $key, bool $lazy = false): bool;
 
 	/**
-	 * Find the lazy group a config key belongs to.
-	 * Returns NULL is key it now known.
+	 * Returns if the config key is lazy loaded
 	 *
-	 * **Warning:** bypass cache and request database each time
+	 * **Warning:** might bypass cache and request database.
 	 *
 	 * @param string $app id of the app
 	 * @param string $key config key
 	 *
-	 * @return string|null lazy group or NULL if key is not found
+	 * @return bool TRUE if config is lazy loaded
 	 * @since 29.0.0
 	 */
-	public function getLazyGroup(string $app, string $key): ?string;
+	public function isLazy(string $app, string $key): bool;
 
 	/**
 	 * List all config values from an app with config key starting with $key.
@@ -137,12 +137,12 @@ interface IAppConfig {
 	 * Returns an array with appId as key, stored value as value.
 	 *
 	 * @param string $key config key
-	 * @param string $lazyGroup lazy group
+	 * @param bool $lazy lazy loading
 	 *
 	 * @return array<string, string> [appId => configValue]
 	 * @since 29.0.0
 	 */
-	public function searchValues(string $key, string $lazyGroup = ''): array;
+	public function searchValues(string $key, bool $lazy = false): array;
 
 	/**
 	 * Get config value assigned to a config key.
@@ -152,7 +152,7 @@ interface IAppConfig {
 	 * @param string $app id of the app
 	 * @param string $key config key
 	 * @param string $default default value (optional)
-	 * @param string $lazyGroup name of the lazy group (optional)
+	 * @param string $lazy name of the lazy group (optional)
 	 *
 	 * @return string stored config value or $default if not set in database
 	 * @since 29.0.0
@@ -162,7 +162,7 @@ interface IAppConfig {
 	 * @see self::getValueBool()
 	 * @see self::getValueArray()
 	 */
-	public function getValueString(string $app, string $key, string $default = '', string $lazyGroup = ''): string;
+	public function getValueString(string $app, string $key, string $default = '', bool $lazy = false): string;
 
 	/**
 	 * Get config value assigned to a config key.
@@ -172,7 +172,7 @@ interface IAppConfig {
 	 * @param string $app id of the app
 	 * @param string $key config key
 	 * @param int $default default value
-	 * @param string $lazyGroup name of the lazy group
+	 * @param string $lazy name of the lazy group
 	 *
 	 * @return int stored config value or $default if not set in database
 	 * @since 29.0.0
@@ -182,7 +182,7 @@ interface IAppConfig {
 	 * @see self::getValueBool()
 	 * @see self::getValueArray()
 	 */
-	public function getValueInt(string $app, string $key, int $default = 0, string $lazyGroup = ''): int;
+	public function getValueInt(string $app, string $key, int $default = 0, bool $lazy = false): int;
 
 	/**
 	 * Get config value assigned to a config key.
@@ -192,7 +192,7 @@ interface IAppConfig {
 	 * @param string $app id of the app
 	 * @param string $key config key
 	 * @param float $default default value (optional)
-	 * @param string $lazyGroup name of the lazy group (optional)
+	 * @param string $lazy name of the lazy group (optional)
 	 *
 	 * @return float stored config value or $default if not set in database
 	 * @since 29.0.0
@@ -202,7 +202,7 @@ interface IAppConfig {
 	 * @see self::getValueBool()
 	 * @see self::getValueArray()
 	 */
-	public function getValueFloat(string $app, string $key, float $default = 0, string $lazyGroup = ''): float;
+	public function getValueFloat(string $app, string $key, float $default = 0, bool $lazy = false): float;
 
 	/**
 	 * Get config value assigned to a config key.
@@ -212,7 +212,7 @@ interface IAppConfig {
 	 * @param string $app id of the app
 	 * @param string $key config key
 	 * @param bool $default default value (optional)
-	 * @param string $lazyGroup name of the lazy group (optional)
+	 * @param string $lazy name of the lazy group (optional)
 	 *
 	 * @return bool stored config value or $default if not set in database
 	 * @since 29.0.0
@@ -222,7 +222,7 @@ interface IAppConfig {
 	 * @see self::getValueFloat()
 	 * @see self::getValueArray()
 	 */
-	public function getValueBool(string $app, string $key, bool $default = false, string $lazyGroup = ''): bool;
+	public function getValueBool(string $app, string $key, bool $default = false, bool $lazy = false): bool;
 
 	/**
 	 * Get config value assigned to a config key.
@@ -231,8 +231,8 @@ interface IAppConfig {
 	 *
 	 * @param string $app id of the app
 	 * @param string $key config key
-	 * @param array $default default value (optional)
-	 * @param string $lazyGroup name of the lazy group (optional)
+	 * @param array $default default value
+	 * @param bool $lazy search within lazy loaded config
 	 *
 	 * @return array stored config value or $default if not set in database
 	 * @since 29.0.0
@@ -242,18 +242,18 @@ interface IAppConfig {
 	 * @see self::getValueFloat()
 	 * @see self::getValueBool()
 	 */
-	public function getValueArray(string $app, string $key, array $default = [], string $lazyGroup = ''): array;
+	public function getValueArray(string $app, string $key, array $default = [], bool $lazy = false): array;
 
 	/**
 	 * Store a config key and its value in database
 	 * If config key is already known with the exact same config value, the database is not updated.
-	 * If config key is not supposed to be read during the boot of the cloud, it is advised to assign it to a lazy group.
+	 * If config key is not supposed to be read during the boot of the cloud, it is advised to set it as lazy loaded.
 	 *
 	 * @param string $app id of the app
 	 * @param string $key config key
 	 * @param string $value config value
 	 * @param bool|null $sensitive value should be hidden when needed. if NULL sensitive flag is not changed in database
-	 * @param string $lazyGroup name of the lazy group
+	 * @param string $lazy name of the lazy group
 	 *
 	 * @return bool TRUE if value was different, therefor updated in database
 	 * @since 29.0.0
@@ -263,18 +263,18 @@ interface IAppConfig {
 	 * @see self::setValueBool()
 	 * @see self::setValueArray()
 	 */
-	public function setValueString(string $app, string $key, string $value, ?bool $sensitive = null, string $lazyGroup = ''): bool;
+	public function setValueString(string $app, string $key, string $value, bool $lazy = false, ?bool $sensitive = null): bool;
 
 	/**
 	 * Store a config key and its value in database
 	 * If config key is already known with the exact same config value, the database is not updated.
-	 * If config key is not supposed to be read during the boot of the cloud, it is advised to assign it to a lazy group.
+	 * If config key is not supposed to be read during the boot of the cloud, it is advised to set it as lazy loaded.
 	 *
 	 * @param string $app id of the app
 	 * @param string $key config key
 	 * @param int $value config value
+	 * @param bool $lazy set config as lazy loaded
 	 * @param bool|null $sensitive value should be hidden when needed. if NULL sensitive flag is not changed in database
-	 * @param string $lazyGroup name of the lazy group
 	 *
 	 * @return bool TRUE if value was different, therefor updated in database
 	 * @since 29.0.0
@@ -284,18 +284,18 @@ interface IAppConfig {
 	 * @see self::setValueBool()
 	 * @see self::setValueArray()
 	 */
-	public function setValueInt(string $app, string $key, int $value, ?bool $sensitive = null, string $lazyGroup = ''): bool;
+	public function setValueInt(string $app, string $key, int $value, bool $lazy = false, ?bool $sensitive = null): bool;
 
 	/**
 	 * Store a config key and its value in database
 	 * If config key is already known with the exact same config value, the database is not updated.
-	 * If config key is not supposed to be read during the boot of the cloud, it is advised to assign it to a lazy group.
+	 * If config key is not supposed to be read during the boot of the cloud, it is advised to set it as lazy loaded.
 	 *
 	 * @param string $app id of the app
 	 * @param string $key config key
 	 * @param float $value config value
+	 * @param bool $lazy set config as lazy loaded
 	 * @param bool|null $sensitive value should be hidden when needed. if NULL sensitive flag is not changed in database
-	 * @param string $lazyGroup name of the lazy group
 	 *
 	 * @return bool TRUE if value was different, therefor updated in database
 	 * @since 29.0.0
@@ -305,18 +305,18 @@ interface IAppConfig {
 	 * @see self::setValueBool()
 	 * @see self::setValueArray()
 	 */
-	public function setValueFloat(string $app, string $key, float $value, ?bool $sensitive = null, string $lazyGroup = ''): bool;
+	public function setValueFloat(string $app, string $key, float $value, bool $lazy = false, ?bool $sensitive = null): bool;
 
 	/**
 	 * Store a config key and its value in database
 	 * If config key is already known with the exact same config value, the database is not updated.
-	 * If config key is not supposed to be read during the boot of the cloud, it is advised to assign it to a lazy group.
+	 * If config key is not supposed to be read during the boot of the cloud, it is advised to set it as lazy loaded.
 	 *
 	 * @param string $app id of the app
 	 * @param string $key config key
 	 * @param bool $value config value
+	 * @param bool $lazy set config as lazy loaded
 	 * @param bool|null $sensitive value should be hidden when needed. if NULL sensitive flag is not changed in database
-	 * @param string $lazyGroup name of the lazy group
 	 *
 	 * @return bool TRUE if value was different, therefor updated in database
 	 * @since 29.0.0
@@ -326,18 +326,18 @@ interface IAppConfig {
 	 * @see self::setValueFloat()
 	 * @see self::setValueArray()
 	 */
-	public function setValueBool(string $app, string $key, bool $value, ?bool $sensitive = null, string $lazyGroup = ''): bool;
+	public function setValueBool(string $app, string $key, bool $value, bool $lazy = false, ?bool $sensitive = null): bool;
 
 	/**
 	 * Store a config key and its value in database
 	 * If config key is already known with the exact same config value, the database is not updated.
-	 * If config key is not supposed to be read during the boot of the cloud, it is advised to assign it to a lazy group.
+	 * If config key is not supposed to be read during the boot of the cloud, it is advised to set it as lazy loaded.
 	 *
 	 * @param string $app id of the app
 	 * @param string $key config key
 	 * @param array $value config value
+	 * @param bool $lazy set config as lazy loaded
 	 * @param bool|null $sensitive value should be hidden when needed. if NULL sensitive flag is not changed in database
-	 * @param string $lazyGroup name of the lazy group
 	 *
 	 * @return bool TRUE if value was different, therefor updated in database
 	 * @since 29.0.0
@@ -347,14 +347,13 @@ interface IAppConfig {
 	 * @see self::setValueFloat()
 	 * @see self::setValueBool()
 	 */
-	public function setValueArray(string $app, string $key, array $value, ?bool $sensitive = null, string $lazyGroup = ''): bool;
+	public function setValueArray(string $app, string $key, array $value, bool $lazy = false, ?bool $sensitive = null): bool;
 
 	/**
 	 * Delete single config key from database.
 	 *
 	 * @param string $app id of the app
 	 * @param string $key config key
-	 *
 	 * @since 29.0.0
 	 */
 	public function unsetKey(string $app, string $key): void;
@@ -366,16 +365,6 @@ interface IAppConfig {
 	 * @since 29.0.0
 	 */
 	public function unsetAppKeys(string $app): void;
-
-	/**
-	 * delete all config keys linked to a lazy group
-	 *
-	 * @param string $lazyGroup
-	 *
-	 * @since 29.0.0
-	 * @see IAppConfig for explanation about lazy grouping
-	 */
-	public function deleteLazyGroup(string $lazyGroup): void;
 
 	/**
 	 * Clear the cache.

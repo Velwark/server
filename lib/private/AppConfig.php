@@ -76,11 +76,9 @@ class AppConfig implements IAppConfig {
 	private const ALL_APPS_CONFIG = '__ALL__';
 	private const APP_MAX_LENGTH = 32;
 	private const KEY_MAX_LENGTH = 64;
-	private const LAZY_MAX_LENGTH = 32;
 
-	private array $fastCache = [];      // cache for fast config keys
-	private array $lazyCache = [];      // cache for lazy config keys
-	private array $loaded = [];         // loaded lazy group
+	private array $fastCache = [], $lazyCache = [], $sensitive = [];         // cache for normal and lazy loaded config keys
+	private bool $fastLoaded = false, $lazyLoaded = false;
 	private ?ICache $distributedCache = null;
 
 	/** @deprecated */
@@ -100,6 +98,7 @@ class AppConfig implements IAppConfig {
 
 	/**
 	 * @inheritDoc
+	 *
 	 * @param bool $preloadValues since 29.0.0 preload all values
 	 *
 	 * @return string[] list of app ids
@@ -110,14 +109,15 @@ class AppConfig implements IAppConfig {
 			$this->loadConfigAll();
 			$keys = array_keys(array_merge($this->fastCache, $this->lazyCache));
 			sort($keys);
+
 			return $keys;
 		}
 
 		$qb = $this->connection->getQueryBuilder();
 		$qb->selectDistinct('appid')
-			->from('appconfig')
-			->orderBy('appid', 'asc')
-			->groupBy('appid');
+		   ->from('appconfig')
+		   ->orderBy('appid', 'asc')
+		   ->groupBy('appid');
 		$result = $qb->executeQuery();
 
 		$rows = $result->fetchAll();
@@ -131,6 +131,7 @@ class AppConfig implements IAppConfig {
 
 	/**
 	 * @inheritDoc
+	 *
 	 * @param string $app id of the app
 	 *
 	 * @return string[] list of stored config keys
@@ -138,25 +139,28 @@ class AppConfig implements IAppConfig {
 	 */
 	public function getKeys(string $app): array {
 		$this->assertParams($app);
-		$this->loadConfig($app, ignoreLazyGroup: true);
-		$keys = array_keys($this->cache[$app] ?? []);
+		$this->loadConfig(null);
+		$keys = array_keys(array_merge($this->fastCache[$app] ?? [], $this->lazyCache[$app] ?? []));
 		sort($keys);
+
 		return $keys;
 	}
 
 	/**
 	 * @inheritDoc
+	 *
 	 * @param string $app id of the app
 	 * @param string $key config key
-	 * @param string $lazyGroup search key within a lazy group (since 29.0.0)
+	 * @param bool $lazy search within lazy config (since 29.0.0)
 	 *
 	 * @return bool TRUE if key exists
 	 * @since 7.0.0
 	 */
-	public function hasKey(string $app, string $key, string $lazyGroup = ''): bool {
-		$this->assertParams($app, $key, $lazyGroup);
-		$this->loadConfig($lazyGroup);
-		($lazyGroup === '') ? $cache = &$this->fastCache : $cache = &$this->lazyCache;
+	public function hasKey(string $app, string $key, bool $lazy = false): bool {
+		$this->assertParams($app, $key);
+		$this->loadConfig($lazy);
+		($lazy) ? $cache = &$this->lazyCache : $cache = &$this->fastCache;
+
 		/** @psalm-suppress UndefinedVariable */
 		return isset($cache[$app][$key]);
 	}
@@ -164,31 +168,33 @@ class AppConfig implements IAppConfig {
 	/**
 	 * @param string $app id of the app
 	 * @param string $key config key
-	 * @param string $lazyGroup lazy group
+	 * @param bool $lazy lazy config
 	 *
-	 * @throws AppConfigUnknownKeyException if config key is not known
 	 * @return bool
+	 * @throws AppConfigUnknownKeyException if config key is not known
 	 * @since 29.0.0
 	 */
-	public function isSensitiveKey(string $app, string $key, string $lazyGroup = ''): bool {
-		$this->assertParams($app, $key, $lazyGroup);
-		$this->loadConfig($lazyGroup);
-		($lazyGroup === '') ? $cache = &$this->fastCache : $cache = &$this->lazyCache;
+	public function isSensitiveKey(string $app, string $key, bool $lazy = false): bool {
+		$this->assertParams($app, $key);
+		$this->loadConfig($lazy);
+		($lazy) ? $cache = &$this->lazyCache : $cache = &$this->fastCache;
+
 		/** @psalm-suppress UndefinedVariable */
 		return $cache[$app][$key]['sensitive'] ?? throw new AppConfigUnknownKeyException();
 	}
 
 	/**
 	 * @inheritDoc
+	 *
 	 * @param string $app if of the app
 	 * @param string $key config key
 	 *
 	 * @return string|null lazy group or NULL if key is not found
 	 */
-	public function getLazyGroup(string $app, string $key): ?string {
+	public function isLazy(string $app, string $key): bool {
 		$this->assertParams($app, $key);
 		$qb = $this->connection->getQueryBuilder();
-		$qb->select('lazy_group')
+		$qb->select('lazy')
 		   ->from('appconfig')
 		   ->where($qb->expr()->eq('appid', $qb->createNamedParameter($app)))
 		   ->andWhere($qb->expr()->eq('configkey', $qb->createNamedParameter($key)));
@@ -196,12 +202,13 @@ class AppConfig implements IAppConfig {
 		$row = $result->fetch();
 		$result->closeCursor();
 
-		return $row['lazy_group'] ?? null;
+		return $row['lazy'] ?? throw new AppConfigUnknownKeyException();
 	}
 
 
 	/**
 	 * @inheritDoc
+	 *
 	 * @param string $app id of the app
 	 * @param string $key config keys prefix to search
 	 * @param bool $filtered filter sensitive config values
@@ -211,9 +218,13 @@ class AppConfig implements IAppConfig {
 	 */
 	public function getAllValues(string $app, string $key = '', bool $filtered = false): array {
 		$this->assertParams($app, $key);
-		$this->loadConfig(ignoreLazyGroup: true);
+		$this->loadConfig(null, $filtered); // if we want to filter values, we need to get sensitivity
 
 		$values = array_merge($this->fastCache[$app], $this->lazyCache[$app] ?? []);
+
+		if (!$filtered) {
+			return $values;
+		}
 
 		/**
 		 * Using the old (deprecated) list of sensitive values.
@@ -221,32 +232,36 @@ class AppConfig implements IAppConfig {
 		foreach ($this->getSensitiveKeys($app) as $sensitiveKeyExp) {
 			$sensitiveKeys = preg_grep($sensitiveKeyExp, array_keys($values));
 			foreach ($sensitiveKeys as $sensitiveKey) {
-				$values[$sensitiveKey]['sensitive'] = true;
+				$this->sensitive[$app][$sensitiveKey] = true;
 			}
 		}
 
-		return array_map(function (array $entry) use ($app): mixed {
-			return ($entry['sensitive']) ? IConfig::SENSITIVE_VALUE : $entry['value'];
-		}, $values);
+		$result = [];
+		foreach ($values as $key => $value) {
+			$result[$key] = ($this->sensitive[$app][$key] ?? false) ? IConfig::SENSITIVE_VALUE : $value;
+		}
+
+		return $result;
 	}
 
 	/**
 	 * @inheritDoc
+	 *
 	 * @param string $key config key
-	 * @param string $lazyGroup lazy group
+	 * @param bool $lazy lazy config
 	 *
 	 * @return array<string, string> [appId => configValue]
 	 * @since 29.0.0
 	 */
-	public function searchValues(string $key, string $lazyGroup = ''): array {
-		$this->assertParams('', $key, $lazyGroup);
-		$this->loadConfig($lazyGroup);
+	public function searchValues(string $key, bool $lazy = false): array {
+		$this->assertParams('', $key, true);
+		$this->loadConfig($lazy);
 		$values = [];
 		/** @var array<array-key, array<array-key, mixed>> $cache */
-		($lazyGroup === '') ? $cache = &$this->fastCache : $cache = &$this->lazyCache;
+		($lazy) ? $cache = &$this->lazyCache : $cache = &$this->fastCache;
 		foreach (array_keys($cache) as $app) {
 			if (isset($cache[$app][$key])) {
-				$values[$app] = $cache[$app][$key]['value'];
+				$values[$app] = $cache[$app][$key];
 			}
 		}
 
@@ -256,10 +271,11 @@ class AppConfig implements IAppConfig {
 
 	/**
 	 * @inheritDoc
+	 *
 	 * @param string $app id of the app
 	 * @param string $key config key
 	 * @param string $default default value (optional)
-	 * @param string $lazyGroup name of the lazy group (optional)
+	 * @param string $lazy name of the lazy group (optional)
 	 *
 	 * @return string stored config value or $default if not set in database
 	 * @throws InvalidArgumentException
@@ -270,20 +286,22 @@ class AppConfig implements IAppConfig {
 	 * @see self::getValueBool()
 	 * @see self::getValueArray()
 	 */
-	public function getValueString(string $app, string $key, string $default = '', string $lazyGroup = ''): string {
-		$this->assertParams($app, $key, $lazyGroup);
-		$this->loadConfig($lazyGroup);
-		($lazyGroup === '') ? $cache = &$this->fastCache : $cache = &$this->lazyCache;
+	public function getValueString(string $app, string $key, string $default = '', bool $lazy = false): string {
+		$this->assertParams($app, $key);
+		$this->loadConfig($lazy);
+		($lazy) ? $cache = &$this->lazyCache : $cache = &$this->fastCache;
+
 		/** @psalm-suppress UndefinedVariable */
-		return $cache[$app][$key]['value'] ?? $default;
+		return $cache[$app][$key] ?? $default;
 	}
 
 	/**
 	 * @inheritDoc
+	 *
 	 * @param string $app id of the app
 	 * @param string $key config key
 	 * @param int $default default value
-	 * @param string $lazyGroup name of the lazy group
+	 * @param string $lazy name of the lazy group
 	 *
 	 * @return int stored config value or $default if not set in database
 	 * @since 29.0.0
@@ -293,16 +311,17 @@ class AppConfig implements IAppConfig {
 	 * @see self::getValueBool()
 	 * @see self::getValueArray()
 	 */
-	public function getValueInt(string $app, string $key, int $default = 0, string $lazyGroup = ''): int {
-		return (int) $this->getValueString($app, $key, (string)$default);
+	public function getValueInt(string $app, string $key, int $default = 0, bool $lazy = false): int {
+		return (int)$this->getValueString($app, $key, (string)$default, $lazy);
 	}
 
 	/**
 	 * @inheritDoc
+	 *
 	 * @param string $app id of the app
 	 * @param string $key config key
 	 * @param float $default default value (optional)
-	 * @param string $lazyGroup name of the lazy group (optional)
+	 * @param string $lazy name of the lazy group (optional)
 	 *
 	 * @return float stored config value or $default if not set in database
 	 * @since 29.0.0
@@ -312,16 +331,17 @@ class AppConfig implements IAppConfig {
 	 * @see self::getValueBool()
 	 * @see self::getValueArray()
 	 */
-	public function getValueFloat(string $app, string $key, float $default = 0, string $lazyGroup = ''): float {
-		return (float) $this->getValueString($app, $key, (string)$default);
+	public function getValueFloat(string $app, string $key, float $default = 0, bool $lazy = false): float {
+		return (float)$this->getValueString($app, $key, (string)$default, $lazy);
 	}
 
 	/**
 	 * @inheritDoc
+	 *
 	 * @param string $app id of the app
 	 * @param string $key config key
 	 * @param bool $default default value (optional)
-	 * @param string $lazyGroup name of the lazy group (optional)
+	 * @param string $lazy name of the lazy group (optional)
 	 *
 	 * @return bool stored config value or $default if not set in database
 	 * @since 29.0.0
@@ -331,16 +351,19 @@ class AppConfig implements IAppConfig {
 	 * @see self::getValueFloat()
 	 * @see self::getValueArray()
 	 */
-	public function getValueBool(string $app, string $key, bool $default = false, string $lazyGroup = ''): bool {
-		return in_array($this->getValueString($app, $key, $default ? 'true' : 'false'), ['1', 'true', 'yes', 'on']);
+	public function getValueBool(string $app, string $key, bool $default = false, bool $lazy = false): bool {
+		return in_array(
+			$this->getValueString($app, $key, $default ? 'true' : 'false'), ['1', 'true', 'yes', 'on'], $lazy
+		);
 	}
 
 	/**
 	 * @inheritDoc
+	 *
 	 * @param string $app id of the app
 	 * @param string $key config key
 	 * @param array $default default value (optional)
-	 * @param string $lazyGroup name of the lazy group (optional)
+	 * @param string $lazy name of the lazy group (optional)
 	 *
 	 * @return array stored config value or $default if not set in database
 	 * @since 29.0.0
@@ -350,10 +373,13 @@ class AppConfig implements IAppConfig {
 	 * @see self::getValueFloat()
 	 * @see self::getValueBool()
 	 */
-	public function getValueArray(string $app, string $key, array $default = [], string $lazyGroup = ''): array {
+	public function getValueArray(string $app, string $key, array $default = [], bool $lazy = false): array {
 		try {
 			$defaultJson = json_encode($default, JSON_THROW_ON_ERROR);
-			$value = json_decode($this->getValueString($app, $key, $defaultJson), true, JSON_THROW_ON_ERROR);
+			$value = json_decode(
+				$this->getValueString($app, $key, $defaultJson, $lazy), true, JSON_THROW_ON_ERROR
+			);
+
 			return (is_array($value)) ? $value : [$value];
 		} catch (JsonException) {
 			return [];
@@ -362,11 +388,13 @@ class AppConfig implements IAppConfig {
 
 	/**
 	 * @inheritDoc
+	 *
 	 * @param string $app id of the app
 	 * @param string $key config key
 	 * @param string $value config value
-	 * @param string $lazyGroup name of the lazy group
-	 * @param bool|null $sensitive value should be hidden when needed. if NULL sensitive flag is not changed in database
+	 * @param string $lazy name of the lazy group
+	 * @param bool|null $sensitive value should be hidden when needed. if NULL sensitive flag is not changed
+	 *     in database
 	 *
 	 * @return bool TRUE if value was different, therefor updated in database
 	 * @since 29.0.0
@@ -380,32 +408,31 @@ class AppConfig implements IAppConfig {
 		string $app,
 		string $key,
 		string $value,
-		?bool $sensitive = null,
-		string $lazyGroup = ''
+		bool $lazy = false,
+		?bool $sensitive = null
 	): bool {
-		$this->assertParams($app, $key, $lazyGroup);
-		$this->loadConfig($lazyGroup);
+		$this->assertParams($app, $key, $lazy);
+		$this->loadConfig($lazy);
+
 		// store value if not known yet, or value is different, or sensitivity changed
-		$updated = !$this->hasKey($app, $key, $lazyGroup)
-				   || $value !== $this->getValueString($app, $key, $value, $lazyGroup)
-				   || ($sensitive !== null && $sensitive !== $this->isSensitiveKey($app, $key, $lazyGroup));
+		$updated = !$this->hasKey($app, $key, $lazy)
+				   || $value !== $this->getValueString($app, $key, $value, $lazy)
+				   || ($sensitive !== null && $sensitive !== $this->isSensitiveKey($app, $key, $lazy));
 		if (!$updated) {
 			return false;
 		}
 
 		// update local cache, do not touch sensitive if null or set it to false if new key
-		($lazyGroup === '') ? $cache = &$this->fastCache : $cache = &$this->lazyCache;
-		$cache[$app][$key] = [
-			'value' => $value,
-			'sensitive' => $sensitive ?? $cache[$app][$key]['sensitive'] ?? false,
-			'lazyGroup' => $lazyGroup
-		];
+		($lazy) ? $cache = &$this->lazyCache : $cache = &$this->fastCache;
+		/** @psalm-suppress UndefinedVariable */
+		$cache[$app][$key] = $value;
+		$this->sensitive[$app][$key] = $sensitive ?? $this->sensitive[$app][$key] ?? false;
 
 		$insert = $this->connection->getQueryBuilder();
 		$insert->insert('appconfig')
 			   ->setValue('appid', $insert->createNamedParameter($app))
-			   ->setValue('lazy_group', $insert->createNamedParameter($lazyGroup))
-			   ->setValue('sensitive', $insert->createNamedParameter(($sensitive ?? false) ? 1 : 0, IQueryBuilder::PARAM_INT))
+			   ->setValue('lazy', $insert->createNamedParameter($lazy, IQueryBuilder::PARAM_BOOL))
+			   ->setValue('sensitive', $insert->createNamedParameter($sensitive ?? false, IQueryBuilder::PARAM_BOOL))
 			   ->setValue('configkey', $insert->createNamedParameter($key))
 			   ->setValue('configvalue', $insert->createNamedParameter($value));
 		try {
@@ -418,11 +445,13 @@ class AppConfig implements IAppConfig {
 			$update = $this->connection->getQueryBuilder();
 			$update->update('appconfig')
 				   ->set('configvalue', $update->createNamedParameter($value))
-				   ->set('lazy_group', $update->createNamedParameter($lazyGroup))
+				   ->set('lazy', $update->createNamedParameter($lazy, IQueryBuilder::PARAM_BOOL))
 				   ->where($update->expr()->eq('appid', $update->createNamedParameter($app)))
 				   ->andWhere($update->expr()->eq('configkey', $update->createNamedParameter($key)));
 			if ($sensitive !== null) {
-				$update->set('sensitive', $update->createNamedParameter($sensitive ? 1 : 0, IQueryBuilder::PARAM_INT));
+				$update->set(
+					'sensitive', $update->createNamedParameter($sensitive, IQueryBuilder::PARAM_BOOL)
+				);
 			}
 
 			$update->executeStatement();
@@ -433,11 +462,13 @@ class AppConfig implements IAppConfig {
 
 	/**
 	 * @inheritDoc
+	 *
 	 * @param string $app id of the app
 	 * @param string $key config key
 	 * @param int $value config value
 	 * @param string $lazyGroup name of the lazy group
-	 * @param bool|null $sensitive value should be hidden when needed. if NULL sensitive flag is not changed in database
+	 * @param bool|null $sensitive value should be hidden when needed. if NULL sensitive flag is not changed
+	 *     in database
 	 *
 	 * @return bool TRUE if value was different, therefor updated in database
 	 * @since 29.0.0
@@ -447,17 +478,25 @@ class AppConfig implements IAppConfig {
 	 * @see self::setValueBool()
 	 * @see self::setValueArray()
 	 */
-	public function setValueInt(string $app, string $key, int $value, ?bool $sensitive = null, string $lazyGroup = ''): bool {
-		return $this->setValueString($app, $key, (string) $value, $sensitive, $lazyGroup);
+	public function setValueInt(
+		string $app,
+		string $key,
+		int $value,
+		bool $lazy = false,
+		?bool $sensitive = null
+	): bool {
+		return $this->setValueString($app, $key, (string)$value, $lazy, $sensitive);
 	}
 
 	/**
 	 * @inheritDoc
+	 *
 	 * @param string $app id of the app
 	 * @param string $key config key
 	 * @param float $value config value
 	 * @param string $lazyGroup name of the lazy group
-	 * @param bool|null $sensitive value should be hidden when needed. if NULL sensitive flag is not changed in database
+	 * @param bool|null $sensitive value should be hidden when needed. if NULL sensitive flag is not changed
+	 *     in database
 	 *
 	 * @return bool TRUE if value was different, therefor updated in database
 	 * @since 29.0.0
@@ -467,17 +506,25 @@ class AppConfig implements IAppConfig {
 	 * @see self::setValueBool()
 	 * @see self::setValueArray()
 	 */
-	public function setValueFloat(string $app, string $key, float $value, ?bool $sensitive = null, string $lazyGroup = ''): bool {
-		return $this->setValueString($app, $key, (string) $value, $sensitive, $lazyGroup);
+	public function setValueFloat(
+		string $app,
+		string $key,
+		float $value,
+		bool $lazy = false,
+		?bool $sensitive = null
+	): bool {
+		return $this->setValueString($app, $key, (string)$value, $lazy, $sensitive);
 	}
 
 	/**
 	 * @inheritDoc
+	 *
 	 * @param string $app id of the app
 	 * @param string $key config key
 	 * @param bool $value config value
 	 * @param string $lazyGroup name of the lazy group
-	 * @param bool|null $sensitive value should be hidden when needed. if NULL sensitive flag is not changed in database
+	 * @param bool|null $sensitive value should be hidden when needed. if NULL sensitive flag is not changed
+	 *     in database
 	 *
 	 * @return bool TRUE if value was different, therefor updated in database
 	 * @since 29.0.0
@@ -487,17 +534,25 @@ class AppConfig implements IAppConfig {
 	 * @see self::setValueFloat()
 	 * @see self::setValueArray()
 	 */
-	public function setValueBool(string $app, string $key, bool $value, ?bool $sensitive = null, string $lazyGroup = ''): bool {
-		return $this->setValueString($app, $key, $value ? 'true' : 'false', $sensitive, $lazyGroup);
+	public function setValueBool(
+		string $app,
+		string $key,
+		bool $value,
+		bool $lazy = false,
+		?bool $sensitive = null
+	): bool {
+		return $this->setValueString($app, $key, $value ? 'true' : 'false', $lazy, $sensitive);
 	}
 
 	/**
 	 * @inheritDoc
+	 *
 	 * @param string $app id of the app
 	 * @param string $key config key
 	 * @param array $value config value
 	 * @param string $lazyGroup name of the lazy group
-	 * @param bool|null $sensitive value should be hidden when needed. if NULL sensitive flag is not changed in database
+	 * @param bool|null $sensitive value should be hidden when needed. if NULL sensitive flag is not changed
+	 *     in database
 	 *
 	 * @return bool TRUE if value was different, therefor updated in database
 	 * @since 29.0.0
@@ -507,11 +562,19 @@ class AppConfig implements IAppConfig {
 	 * @see self::setValueFloat()
 	 * @see self::setValueBool()
 	 */
-	public function setValueArray(string $app, string $key, array $value, ?bool $sensitive = null, string $lazyGroup = ''): bool {
+	public function setValueArray(
+		string $app,
+		string $key,
+		array $value,
+		bool $lazy = false,
+		?bool $sensitive = null
+	): bool {
 		try {
-			return $this->setValueString($app, $key, json_encode($value, JSON_THROW_ON_ERROR), $sensitive, $lazyGroup);
+			return $this->setValueString($app, $key, json_encode($value, JSON_THROW_ON_ERROR), $lazy, $sensitive);
 		} catch (JsonException $e) {
-			$this->logger->warning('could not setValueArray', ['app' => $app, 'key' => $key, 'exception' => $e]);
+			$this->logger->warning(
+				'could not setValueArray', ['app' => $app, 'key' => $key, 'exception' => $e]
+			);
 		}
 
 		return false;
@@ -519,6 +582,7 @@ class AppConfig implements IAppConfig {
 
 	/**
 	 * @inheritDoc
+	 *
 	 * @param string $app id of the app
 	 * @param string $key config key
 	 * @param string $lazyGroup name of the lazy group
@@ -543,6 +607,7 @@ class AppConfig implements IAppConfig {
 
 	/**
 	 * @inheritDoc
+	 *
 	 * @param string $app id of the app
 	 *
 	 * @since 29.0.0
@@ -551,24 +616,7 @@ class AppConfig implements IAppConfig {
 		$this->assertParams($app);
 		$qb = $this->connection->getQueryBuilder();
 		$qb->delete('appconfig')
-			->where($qb->expr()->eq('appid', $qb->createNamedParameter($app)));
-		$qb->executeStatement();
-
-		$this->clearCache();
-	}
-
-	/**
-	 * @inheritDoc
-	 * @param string $lazyGroup
-	 *
-	 * @since 29.0.0
-	 * @see IAppConfig for explanation about lazy grouping
-	 */
-	public function deleteLazyGroup(string $lazyGroup): void {
-		$this->assertParams(lazyGroup: $lazyGroup);
-		$qb = $this->connection->getQueryBuilder();
-		$qb->delete('appconfig')
-		   ->where($qb->expr()->eq('lazy_group', $qb->createNamedParameter($lazyGroup)));
+		   ->where($qb->expr()->eq('appid', $qb->createNamedParameter($app)));
 		$qb->executeStatement();
 
 		$this->clearCache();
@@ -579,7 +627,8 @@ class AppConfig implements IAppConfig {
 	 * @since 29.0.0
 	 */
 	public function clearCache(): void {
-		$this->lazyCache = $this->fastCache = [];
+		$this->lazyLoaded = $this->fastLoaded = false;
+		$this->lazyCache = $this->fastCache = $this->sensitive = [];
 		$this->storeDistributedCache();
 	}
 
@@ -594,9 +643,10 @@ class AppConfig implements IAppConfig {
 		}
 
 		return [
+			'fastLoaded' => $this->fastLoaded,
 			'fastCache' => $this->fastCache,
+			'lazyLoaded' => $this->lazyLoaded,
 			'lazyCache' => $this->lazyCache,
-			'loaded' => $this->loaded,
 			'distributedCache' => $distributed
 		];
 	}
@@ -608,20 +658,23 @@ class AppConfig implements IAppConfig {
 	 * @param string $configKey
 	 * @param string $lazyGroup
 	 * @param bool $allowEmptyApp
+	 *
 	 * @throws InvalidArgumentException
 	 */
-	private function assertParams(string $app = '', string $configKey = '', string $lazyGroup = '', bool $allowEmptyApp = false): void {
+	private function assertParams(string $app = '', string $configKey = '', bool $allowEmptyApp = false
+	): void {
 		if (!$allowEmptyApp && $app === '') {
 			throw new InvalidArgumentException('app cannot be an empty string');
 		}
 		if (strlen($app) > self::APP_MAX_LENGTH) {
-			throw new InvalidArgumentException('Value (' . $app . ') for app is too long (' . self::APP_MAX_LENGTH . ')');
+			throw new InvalidArgumentException(
+				'Value (' . $app . ') for app is too long (' . self::APP_MAX_LENGTH . ')'
+			);
 		}
 		if (strlen($configKey) > self::KEY_MAX_LENGTH) {
-			throw new InvalidArgumentException('Value (' . $configKey . ') for key is too long (' . self::KEY_MAX_LENGTH . ')');
-		}
-		if (strlen($lazyGroup) > self::LAZY_MAX_LENGTH) {
-			throw new InvalidArgumentException('Value (' . $lazyGroup . ') for lazyGroup is too long (' . self::LAZY_MAX_LENGTH . ')');
+			throw new InvalidArgumentException(
+				'Value (' . $configKey . ') for key is too long (' . self::KEY_MAX_LENGTH . ')'
+			);
 		}
 	}
 
@@ -642,19 +695,22 @@ class AppConfig implements IAppConfig {
 	}
 
 	private function loadConfigAll(): void {
-		// TODO: why use of __ALL__ ? still needed ?
-		$this->loadConfig(self::ALL_APPS_CONFIG, ignoreLazyGroup: true);
+		$this->loadConfig(null);
 	}
 
 	/**
-	 * We store config in multiple internal cache, so we don't load everything
+	 * Load normal config or config set as lazy loaded
 	 *
-	 * @param string $app
-	 * @param string $lazyGroup
-	 * @param bool $ignoreLazyGroup
+	 * @param bool|null $lazy set to TRUE to load config set as lazy loaded, set to NULL to load all config
+	 * @param bool $loadSensitivityLevel set to TRUE to load in memory the sensitivity level for each config
+	 *     value. (Will refresh the cache)
 	 */
-	private function loadConfig(string $lazyGroup = '', bool $ignoreLazyGroup = false): void {
-		if ($this->isLoaded($lazyGroup)) {
+	private function loadConfig(?bool $lazy = false, bool $loadSensitivityLevel = false): void {
+		if ($loadSensitivityLevel) {
+			$this->clearCache();
+		}
+
+		if ($this->isLoaded($lazy)) {
 			return;
 		}
 
@@ -667,9 +723,9 @@ class AppConfig implements IAppConfig {
 		if (!$this->migrationCompleted) {
 			$qb->select('appid', 'configkey', 'configvalue');
 		} else {
-			$qb->select('appid', 'configkey', 'configvalue', 'sensitive', 'lazy_group');
-			if (!$ignoreLazyGroup) {
-				$qb->where($qb->expr()->eq('lazy_group', $qb->createNamedParameter($lazyGroup)));
+			$qb->select('appid', 'configkey', 'configvalue', 'sensitive', 'lazy');
+			if ($lazy !== null) {
+				$qb->where($qb->expr()->eq('lazy', $qb->createNamedParameter($lazy, IQueryBuilder::PARAM_BOOL)));
 			}
 		}
 
@@ -678,7 +734,7 @@ class AppConfig implements IAppConfig {
 		} catch (DBException $e) {
 			/**
 			 * in case of issue with field name, it means that migration is not completed.
-			 * Falling back to a request without select on lazy_group.
+			 * Falling back to a request without select on lazy.
 			 * This whole try/catch and the migrationCompleted variable can be removed in NC30.
 			 */
 			if ($e->getReason() !== DBException::REASON_INVALID_FIELD_NAME) {
@@ -686,49 +742,63 @@ class AppConfig implements IAppConfig {
 			}
 
 			$this->migrationCompleted = false;
-			$this->loadConfig($lazyGroup, $ignoreLazyGroup);
+			$this->loadConfig($lazy, $loadSensitivityLevel);
+
 			return;
 		}
 
-		$this->setLoadedStatus($lazyGroup); // in case the group is empty
 		$rows = $result->fetchAll();
 		foreach ($rows as $row) {
-			if ($ignoreLazyGroup) {
-				$this->setLoadedStatus($row['lazy_group'] ?? '');
-			}
-			// if migration is not completed, 'lazy_group' does not exist in $row
-			(($row['lazy_group'] ?? '') === '') ? $cache = &$this->fastCache : $cache = &$this->lazyCache;
-			$cache[$row['appid']][$row['configkey']] =
-				[
-					'value' => $row['configvalue'],
-					'lazyGroup' => $row['lazy_group'],
-					'sensitive' => ($row['sensitive'] === 1)
-				];
+			// if migration is not completed, 'lazy' does not exist in $row
+			(($row['lazy'] ?? false) == true) ? $cache = &$this->lazyCache : $cache = &$this->fastCache;
+			$cache[$row['appid']][$row['configkey']] = $row['configvalue'];
+			$this->sensitive[$row['appid']][$row['configkey']] = $row['sensitive'];
 		}
+
 		$result->closeCursor();
-		if ($lazyGroup === '' && !$ignoreLazyGroup) {
+		$this->setAsLoaded($lazy);
+
+		// store as soon as we know we have fastCache filled
+		if ($lazy ?? true) {
 			$this->storeDistributedCache();
 		}
 	}
 
 	/**
-	 * @param string $lazyGroup
+	 * if $lazy is:
+	 *  - false: will returns true if fast config is loaded
+	 *  - true : will returns true if lazy config is loaded
+	 *  - null : will returns true if both config are loaded
+	 *
+	 * @param bool $lazy
 	 *
 	 * @return bool
 	 */
-	private function isLoaded(string $lazyGroup): bool {
-		return in_array($lazyGroup, $this->loaded);
-	}
-
-	private function setLoadedStatus(string $lazyGroup): void {
-		if ($this->isLoaded($lazyGroup)) {
-			return;
+	private function isLoaded(?bool $lazy): bool {
+		if ($lazy === null) {
+			return $this->lazyLoaded && $this->fastLoaded;
 		}
 
-		$this->loaded[] = $lazyGroup;
+		return $lazy ? $this->lazyLoaded : $this->fastLoaded;
 	}
 
+	/**
+	 * if $lazy is:
+	 * - false: set fast config as loaded
+	 * - true : set lazy config as loaded
+	 * - null : set both config as loaded
+	 *
+	 * @param bool $lazy
+	 */
+	private function setAsLoaded(?bool $lazy): void {
+		if ($lazy !== null) {
+			$lazy ? $this->lazyLoaded = true : $this->fastLoaded = true;
 
+			return;
+		}
+		$this->fastLoaded = true;
+		$this->lazyLoaded = true;
+	}
 
 	private function loadDistributedCache(string $lazyGroup = ''): void {
 		if ($this->distributedCache === null) {
@@ -741,7 +811,7 @@ class AppConfig implements IAppConfig {
 
 		try {
 			$this->fastCache = $this->getDistributedCache('fastCache');
-			$this->setLoadedStatus('');
+			$this->setAsLoaded(false);
 		} catch (JsonException $e) {
 			$this->logger->warning('AppConfig distributed cache seems corrupted', ['exception' => $e]);
 			$this->fastCache = [];
@@ -788,18 +858,20 @@ class AppConfig implements IAppConfig {
 	 */
 	public function getValue($app, $key, $default = null) {
 		$this->loadConfig();
+
 		return $this->fastCache[$app][$key] ?? $default;
 	}
 
 	/**
 	 * Sets a value. If the key did not exist before it will be created.
-	 * @deprecated
 	 *
 	 * @param string $app app
 	 * @param string $key key
 	 * @param string|float|int $value value
 	 *
 	 * @return bool True if the value was inserted or updated, false if the value was the same
+	 * @deprecated
+	 *
 	 */
 	public function setValue($app, $key, $value) {
 		return $this->setValueString($app, $key, (string)$value);
@@ -811,12 +883,14 @@ class AppConfig implements IAppConfig {
 	 *
 	 * @param string $app app
 	 * @param string $key key
-	 * @deprecated use unsetKey()
-	 * @see self::unsetKey()
+	 *
 	 * @return boolean
+	 * @see self::unsetKey()
+	 * @deprecated use unsetKey()
 	 */
 	public function deleteKey($app, $key) {
 		$this->unsetKey($app, $key);
+
 		return false;
 	}
 
@@ -832,6 +906,7 @@ class AppConfig implements IAppConfig {
 	 */
 	public function deleteApp($app) {
 		$this->unsetAppKeys($app);
+
 		return false;
 	}
 

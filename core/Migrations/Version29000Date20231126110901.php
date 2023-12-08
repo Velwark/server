@@ -42,20 +42,20 @@ class Version29000Date20231126110901 extends SimpleMigrationStep {
 		}
 
 		$table = $schema->getTable('appconfig');
-		if ($table->hasColumn('lazy_group')) {
+		if ($table->hasColumn('lazy')) {
 			return null;
 		}
 
-		$table->addColumn('lazy_group', Types::STRING, ['length' => 32, 'default' => '']);
-		$table->addColumn('sensitive', Types::SMALLINT, ['length' => 1, 'default' => '0']);
+		$table->addColumn('lazy', Types::BOOLEAN, ['notnull' => false, 'default' => false]);
+		$table->addColumn('sensitive', Types::BOOLEAN, ['notnull' => false, 'default' => false]);
 
 		if ($table->hasIndex('appconfig_config_key_index')) {
 			$table->dropIndex('appconfig_config_key_index');
 		}
 
-		$table->addIndex(['lazy_group'], 'ac_lazy_i');
-		$table->addIndex(['appid', 'lazy_group'], 'ac_app_lazy_i');
-		$table->addIndex(['appid', 'lazy_group', 'configkey'], 'ac_app_lazy_key_i');
+		$table->addIndex(['lazy'], 'ac_lazy_i');
+		$table->addIndex(['appid', 'lazy'], 'ac_app_lazy_i');
+		$table->addIndex(['appid', 'lazy', 'configkey'], 'ac_app_lazy_key_i');
 
 		return $schema;
 	}
