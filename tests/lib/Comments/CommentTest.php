@@ -24,7 +24,7 @@ class CommentTest extends TestCase {
 		$latestChildDT = new \DateTime('yesterday');
 		$object = ['type' => 'files', 'id' => 'file64'];
 		$referenceId = sha1('referenceId');
-		$metaData = json_encode(['last_edit_actor_id' => 'admin']);
+		$metaData = ['last_edit_actor_id' => 'admin'];
 
 		$comment
 			->setId($id)

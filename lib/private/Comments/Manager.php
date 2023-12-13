@@ -98,7 +98,7 @@ class Manager implements ICommentsManager {
 		}
 		$data['children_count'] = (int)$data['children_count'];
 		$data['reference_id'] = $data['reference_id'];
-		$data['meta_data'] = $data['meta_data'];
+		$data['meta_data'] = json_decode($data['meta_data'], true);
 		if ($this->supportReactions()) {
 			if ($data['reactions'] !== null) {
 				$list = json_decode($data['reactions'], true);
@@ -1167,7 +1167,7 @@ class Manager implements ICommentsManager {
 			'object_id' => $qb->createNamedParameter($comment->getObjectId()),
 			'expire_date' => $qb->createNamedParameter($comment->getExpireDate(), 'datetime'),
 			'reference_id' => $qb->createNamedParameter($comment->getReferenceId()),
-			'meta_data' => $qb->createNamedParameter($comment->getMetaData()),
+			'meta_data' => $qb->createNamedParameter(json_encode($comment->getMetaData())),
 		];
 
 		$affectedRows = $qb->insert('comments')
@@ -1300,7 +1300,7 @@ class Manager implements ICommentsManager {
 			->set('object_id', $qb->createNamedParameter($comment->getObjectId()))
 			->set('expire_date', $qb->createNamedParameter($comment->getExpireDate(), 'datetime'))
 			->set('reference_id', $qb->createNamedParameter($comment->getReferenceId()))
-			->set('meta_data', $qb->createNamedParameter($comment->getMetaData()))
+			->set('meta_data', $qb->createNamedParameter(json_encode($comment->getMetaData())))
 			->where($qb->expr()->eq('id', $qb->createNamedParameter($comment->getId())));
 		$affectedRows = $qb->executeStatement();
 

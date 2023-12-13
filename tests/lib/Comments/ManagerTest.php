@@ -142,7 +142,7 @@ class ManagerTest extends TestCase {
 		$this->assertSame($comment->getObjectId(), 'file64');
 		$this->assertEquals($comment->getCreationDateTime()->getTimestamp(), $creationDT->getTimestamp());
 		$this->assertEquals($comment->getReferenceId(), 'referenceId');
-		$this->assertEquals($comment->getMetaData(), json_encode(['last_edit_actor_id' => 'admin']));
+		$this->assertEquals($comment->getMetaData(), ['last_edit_actor_id' => 'admin']);
 	}
 
 
