@@ -85,6 +85,11 @@ class CommentNode implements \Sabre\DAV\INode, \Sabre\DAV\IProperties {
 			if ($getter === 'getMentions') {
 				continue;	// special treatment
 			}
+			if ($getter === 'getMetaData') {
+				// Array can not be handled at the moment in DAV
+				continue;
+			}
+
 			$name = '{'.self::NS_OWNCLOUD.'}' . lcfirst(substr($getter, 3));
 			$this->properties[$name] = $getter;
 		}
