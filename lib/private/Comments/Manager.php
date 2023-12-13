@@ -29,7 +29,6 @@
 namespace OC\Comments;
 
 use Doctrine\DBAL\Exception\DriverException;
-use Doctrine\DBAL\Exception\InvalidFieldNameException;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Comments\CommentsEvent;
 use OCP\Comments\IComment;
