@@ -280,6 +280,24 @@ interface IComment {
 	public function setReferenceId(?string $referenceId): IComment;
 
 	/**
+	 * returns the meta data of the comment
+	 *
+	 * @return string|null
+	 * @since 29.0.0
+	 */
+	public function getMetaData(): ?string;
+
+	/**
+	 * Sets (overwrites) the meta data of the comment
+	 * It is recommended to store the data as a json encoded array
+	 *
+	 * @param string|null $metaData
+	 * @return IComment
+	 * @since 29.0.0
+	 */
+	public function setMetaData(?string $metaData): IComment;
+
+	/**
 	 * Returns the reactions array if exists
 	 *
 	 * The keys is the emoji of reaction and the value is the total.

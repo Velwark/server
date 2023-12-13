@@ -42,6 +42,7 @@ class Comment implements IComment {
 		'objectType' => '',
 		'objectId' => '',
 		'referenceId' => null,
+		'metaData' => null,
 		'creationDT' => null,
 		'latestChildDT' => null,
 		'reactions' => null,
@@ -397,6 +398,21 @@ class Comment implements IComment {
 			}
 			$this->data['referenceId'] = $referenceId;
 		}
+		return $this;
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function getMetaData(): ?string {
+		return $this->data['metaData'];
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function setMetaData(?string $metaData):  IComment {
+		$this->data['metaData'] = $metaData;
 		return $this;
 	}
 
