@@ -1272,12 +1272,7 @@ class Manager implements ICommentsManager {
 		$this->sendEvent(CommentsEvent::EVENT_PRE_UPDATE, $this->get($comment->getId()));
 		$this->uncache($comment->getId());
 
-		try {
-			$result = $this->updateQuery($comment, true);
-		} catch (InvalidFieldNameException $e) {
-			// See function insert() for explanation
-			$result = $this->updateQuery($comment, false);
-		}
+		$result = $this->updateQuery($comment);
 
 		if ($comment->getVerb() === 'reaction_deleted') {
 			$this->deleteReaction($comment);
