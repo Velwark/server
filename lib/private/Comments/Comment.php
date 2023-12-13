@@ -404,15 +404,28 @@ class Comment implements IComment {
 	/**
 	 * @inheritDoc
 	 */
-	public function getMetaData(): ?string {
-		return $this->data['metaData'];
+	public function getMetaData(): ?array {
+		if ($this->data['metaData'] === null) {
+			return null;
+		}
+
+		try {
+			$metaData = json_decode($this->data['metaData'], true, flags: JSON_THROW_ON_ERROR);
+		} catch (\JsonException $e) {
+			return null;
+		}
+		return is_array($metaData) ? $metaData : null;
 	}
 
 	/**
 	 * @inheritDoc
 	 */
-	public function setMetaData(?string $metaData):  IComment {
-		$this->data['metaData'] = $metaData;
+	public function setMetaData(?array $metaData):  IComment {
+		if ($metaData === null) {
+			$this->data['metaData'] = null;
+		} else {
+			$this->data['metaData'] = json_encode($metaData, JSON_THROW_ON_ERROR);
+		}
 		return $this;
 	}
 
